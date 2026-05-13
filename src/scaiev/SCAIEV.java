@@ -15,6 +15,7 @@ import org.yaml.snakeyaml.Yaml;
 import scaiev.backend.BNode;
 import scaiev.backend.CVA5;
 import scaiev.backend.CVA6;
+import scaiev.backend.CV32E40X;
 import scaiev.backend.CoreBackend;
 import scaiev.backend.Orca;
 import scaiev.backend.Piccolo;
@@ -211,6 +212,8 @@ public class SCAIEV {
       coreInstanceOpt = Optional.of(new CVA5());
     } else if (coreName.equals("CVA6") || coreName.startsWith("CVA6_")) {
       coreInstanceOpt = Optional.of(new CVA6());
+    } else if (coreName.equals("CV32E40X")) {
+      coreInstanceOpt = Optional.of(new CV32E40X());
     }
 
     // Generate Interface
