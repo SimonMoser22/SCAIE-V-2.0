@@ -21,14 +21,14 @@ pipeline:
   - {name: decoupled1,  kind: decoupled,    externalID: 4,  continuous: true, tags: [inorder, commit], nextStages: [], children: []}
 operations:
 - operation: RdRS1
-  earliest: 1
+  earliest: 2
   latency: 0
-  latest: 1
+  latest: 2
   costly: 1
 - operation: RdRS2
-  earliest: 1
+  earliest: 2
   latency: 0
-  latest: 1
+  latest: 2
   costly: 1
 - operation: WrRD
   earliest: 3
