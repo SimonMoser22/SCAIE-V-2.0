@@ -16,3 +16,6 @@
 [submodule "CoresSrc/CVA6"]
 	path = CoresSrc/CVA6
 	url = https://github.com/esa-tu-darmstadt/cva6-sv.git
+[submodule "CoresSrc/CV32E40X"]
+	path = CoresSrc/CV32E40X
+	url = https://github.com/SimonMoser22/cv32e40x.git
