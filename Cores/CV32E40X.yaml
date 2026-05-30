@@ -21,12 +21,12 @@ pipeline:
   - {name: decoupled1,  kind: decoupled,    externalID: 4,  continuous: true, tags: [inorder, commit], nextStages: [], children: []}
 operations:
 - operation: RdRS1
-  earliest: 2
+  earliest: 1
   latency: 0
   latest: 2
   costly: 1
 - operation: RdRS2
-  earliest: 2
+  earliest: 1
   latency: 0
   latest: 2
   costly: 1
@@ -46,15 +46,16 @@ operations:
   latency: 0
   latest: 2
   costly: 3
-#- operation: RdMem
-#  earliest: 2
-#  latency: 1 
-#  latest: 2
-#  costly: 4
-#- operation: WrMem
-#  earliest: 2
-#  latency: 1 
-#  costly: 4
+- operation: RdMem
+  earliest: 2
+  latency: 1 
+  latest: 2
+  costly: 4
+- operation: WrMem
+  earliest: 2
+  latency: 1
+  latest: 2
+  costly: 4
 - operation: RdIValid
   earliest: 1
   latency: 0
@@ -66,22 +67,22 @@ operations:
   latest: 3
   costly: 1
 - operation: RdStall
-  earliest: 1
+  earliest: 0
   latency: 0
   latest: 2
   costly: 4
 - operation: WrStall
-  earliest: 1
+  earliest: 0
   latency: 0
   latest: 2
   costly: 3
 - operation: RdFlush
-  earliest: 1
+  earliest: 0
   latency: 0
   latest: 2
   costly: 4
 - operation: WrFlush
-  earliest: 1
+  earliest: 0
   latency: 0
   latest: 2
   costly: 4
