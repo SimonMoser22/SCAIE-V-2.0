@@ -6,16 +6,16 @@
 #    3: writeback
 
 !SerialCoreDescription
-pipeline:
-  name: root
-  kind: root
-  tags: []
-  externalID: -1
-  continuous: false
-  nextStages: []
-  children:
-  - {name: fetch,       kind: core,         externalID: 0,  continuous: true, tags: [inorder], nextStages: [decode], children: []}
-  - {name: decode,      kind: core,         externalID: 1,  continuous: true, tags: [inorder, issue], nextStages: [execute], children: []}
+pipeline:  
+  name: root  
+  kind: root  
+  tags: []  
+  externalID: -1  
+  continuous: false  
+  nextStages: []  
+  children:  
+  - {name: fetch,       kind: core,         externalID: 0,  continuous: true, tags: [inorder], nextStages: [decode], children: []}  
+  - {name: decode,      kind: core,         externalID: 1,  continuous: true, tags: [inorder, issue], nextStages: [execute], children: []}  
   - {name: execute,     kind: core,         externalID: 2,  continuous: true, tags: [inorder, execute], nextStages: [writeback], children: []}
   - {name: writeback,   kind: core,         externalID: 3,  continuous: true, tags: [inorder, commit, nonspeculative], nextStages: [decoupled1], children: []}
   - {name: decoupled1,  kind: decoupled,    externalID: 4,  continuous: true, tags: [inorder, commit], nextStages: [], children: []}
@@ -24,16 +24,16 @@ operations:
   earliest: 1
   latency: 0
   latest: 2
-  costly: 1
+  costly: 2
 - operation: RdRS2
   earliest: 1
   latency: 0
   latest: 2
-  costly: 1
+  costly: 2
 - operation: WrRD
-  earliest: 3
+  earliest: 2
   latency: 1
-  latest: 3
+  latest: 2
   costly: 2
 
 - operation: RdPC

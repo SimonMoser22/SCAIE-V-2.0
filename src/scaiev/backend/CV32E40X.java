@@ -1,6 +1,7 @@
 package scaiev.backend;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -9,6 +10,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import scaiev.coreconstr.Core;
 import scaiev.coreconstr.CoreNode;
@@ -23,6 +26,9 @@ import scaiev.util.ToWrite;
 import scaiev.util.Verilog;
 
 public class CV32E40X extends CoreBackend {
+	
+	// logging
+	protected static final Logger logger = LogManager.getLogger();
 	
 	static final Path pathSrc = Path.of("CoresSrc/CV32E40X");
 	static final Path pathCore = Path.of("rtl");
@@ -55,9 +61,20 @@ public class CV32E40X extends CoreBackend {
 	}
 	
 	// From CVA5.java
-	private void addLogic(String text) {
+	private void AddLogic(String text) {
 		toFile.UpdateContent(this.ModFile(targetModule), "endmodule", new ToWrite(text, false, true, "", true, targetModule));
 	}
+	
+	// From CVA5.java
+	private void AddLogicBefore(String grep, String text) {
+		toFile.UpdateContent(this.ModFile(targetModule), grep, new ToWrite(text, false, true, "", true, targetModule));
+	}
+	
+	
+	private void ReplaceLogic(String grep, String replaceWith) {
+		toFile.ReplaceContent(this.ModFile(targetModule), grep, new ToWrite(replaceWith, false, true, "", true, targetModule));
+	}
+	
 
 	// From CVA5.java
 	private boolean ContainsOpInStage(SCAIEVNode operation, PipelineStage stage) {
@@ -65,7 +82,7 @@ public class CV32E40X extends CoreBackend {
 	}
 	
 	// From CVA5.java
-	private Stream<SCAIEVInstr> getISAXesWithOpInAnyStage(SCAIEVNode operation) {
+	private Stream<SCAIEVInstr> GetISAXesWithOpInAnyStage(SCAIEVNode operation) {
 	    return !op_stage_instr.containsKey(operation) ? Stream.<SCAIEVInstr>of()
 	                                                  : op_stage_instr.get(operation)
 	                                                        .values()
@@ -84,7 +101,7 @@ public class CV32E40X extends CoreBackend {
 	}
 	
 	// From CVA5.java
-	private void forEachRdValidPin(RdValidPinConsumer consumer) {
+	private void ForEachRdValidPin(RdValidPinConsumer consumer) {
 		Stream<NodeInstanceDesc.Key> ivalidKeyStream;
 	
 		ivalidKeyStream = ISAXes.entrySet().stream()
@@ -99,6 +116,13 @@ public class CV32E40X extends CoreBackend {
 		});
 	
 	}
+	
+	// From CVA5.java
+	private Stream<SCAIEVInstr> GetISAXesWithOpInStage(SCAIEVNode operation, PipelineStage stage) {
+		return (!op_stage_instr.containsKey(operation) || !op_stage_instr.get(operation).containsKey(stage))
+		    ? Stream.<SCAIEVInstr>of()
+			: op_stage_instr.get(operation).get(stage).stream().map(instr_name -> ISAXes.get(instr_name)).filter(instr -> instr != null);
+	  }
 	
 	
 	@Override
@@ -125,7 +149,7 @@ public class CV32E40X extends CoreBackend {
 		this.language.reset = "rst_n";
 		
 		
-		forEachRdValidPin((name, isax, stage) -> {scalAPI.RequestToCorePin(BNode.RdIValid, stage, isax.GetName());});
+		ForEachRdValidPin((name, isax, stage) -> {scalAPI.RequestToCorePin(BNode.RdIValid, stage, isax.GetName());});
 		
 	}
 
@@ -134,6 +158,9 @@ public class CV32E40X extends CoreBackend {
 			HashMap<SCAIEVNode, HashMap<PipelineStage, HashSet<String>>> op_stage_instr, String extension_name,
 			Core core, String out_path) {
 		System.out.println("Generating for CV32E40X!");
+		
+		this.op_stage_instr = op_stage_instr;
+		this.ISAXes = ISAXes;
 
 		ConfigCV32E40X();       
         
@@ -141,6 +168,7 @@ public class CV32E40X extends CoreBackend {
         IntegrateISAX_NoIllegalInstr();
         IntegrateISAX_WrStall();
         IntegrateISAX_WrFlush();
+        IntegrateISAX_WrRD();
         
       
         language.FinalizeInterfaces();
@@ -189,6 +217,8 @@ public class CV32E40X extends CoreBackend {
         // WrPC
         
         // WrRD
+        this.PutNode("logic", "", targetModule, BNode.WrRD, stage_execute);
+        this.PutNode("logic", "", targetModule, BNode.WrRD_valid, stage_execute);
         
         // RdFlush
         this.PutNode("logic",  "scaiev.fetch_isKilled", targetModule, BNode.RdFlush, stage_fetch);
@@ -229,7 +259,7 @@ public class CV32E40X extends CoreBackend {
 		);
 	        
 
-		forEachRdValidPin((node, isax, stage) -> language.UpdateInterface(topModule, node.NodeNegInput(), isax.GetName(), stage, true, false));
+		ForEachRdValidPin((node, isax, stage) -> language.UpdateInterface(topModule, node.NodeNegInput(), isax.GetName(), stage, true, false));
 
 	}
 
@@ -244,9 +274,9 @@ public class CV32E40X extends CoreBackend {
 	    List<String> allISAXes_RS2;
 	    List<String> allISAXes_RD;
 	
-	    allISAXes_RS1 = getISAXesWithOpInAnyStage(BNode.RdRS1).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
-	    allISAXes_RS2 = getISAXesWithOpInAnyStage(BNode.RdRS2).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
-	    allISAXes_RD = getISAXesWithOpInAnyStage(BNode.WrRD).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
+	    allISAXes_RS1 = GetISAXesWithOpInAnyStage(BNode.RdRS1).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
+	    allISAXes_RS2 = GetISAXesWithOpInAnyStage(BNode.RdRS2).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
+	    allISAXes_RD = GetISAXesWithOpInAnyStage(BNode.WrRD).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
 
 	    Function<List<String>, String> makeIValidExpression = isaxNames -> {
 	      return isaxNames.stream()
@@ -257,10 +287,10 @@ public class CV32E40X extends CoreBackend {
 	          .orElse("1'b0");
 	    };
 	    
-	    addLogic("assign scaiev.decode_isSCAIEV = " + makeIValidExpression.apply(allISAXes) + ";");
-	    addLogic("assign scaiev.decode_isSCAIEV_usesRS1 = " + makeIValidExpression.apply(allISAXes_RS1) + ";");
-	    addLogic("assign scaiev.decode_isSCAIEV_usesRS2 = " + makeIValidExpression.apply(allISAXes_RS2) + ";");
-	    addLogic("assign scaiev.decode_isSCAIEV_usesRD = " + makeIValidExpression.apply(allISAXes_RD) + ";\n");
+	    ReplaceLogic("assign scaiev.decode_isSCAIEV",         "assign scaiev.decode_isSCAIEV = " + makeIValidExpression.apply(allISAXes) + ";");
+	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRS1", "assign scaiev.decode_isSCAIEV_usesRS1 = " + makeIValidExpression.apply(allISAXes_RS1) + ";");
+	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRS2", "assign scaiev.decode_isSCAIEV_usesRS2 = " + makeIValidExpression.apply(allISAXes_RS2) + ";");
+	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRD",  "assign scaiev.decode_isSCAIEV_usesRD = " + makeIValidExpression.apply(allISAXes_RD) + ";\n");
 	}
 	
 	private void IntegrateISAX_WrStall() {
@@ -268,11 +298,9 @@ public class CV32E40X extends CoreBackend {
 		for (int stagePos = stagePos_fetch; stagePos <= stagePos_execute; stagePos++) {
 			PipelineStage stage = stages[stagePos];
 			if (ContainsOpInStage(BNode.WrStall, stage)) {
-				addLogic("assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt = " + language.CreateNodeName(BNode.WrStall, stage, "") + ";");
+				String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt";
+				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt = " + language.CreateNodeName(BNode.WrStall, stage, "") + ";");
 			}
-			else {
-				addLogic("assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt = '0;");
-			}	
 		}
 	}
 	
@@ -281,11 +309,40 @@ public class CV32E40X extends CoreBackend {
 		for (int stagePos = stagePos_fetch; stagePos <= stagePos_execute; stagePos++) {
 			PipelineStage stage = stages[stagePos];
 			if (ContainsOpInStage(BNode.WrFlush, stage)) {
-				addLogic("assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + language.CreateNodeName(BNode.WrFlush, stage, "") + ";");
-			}
-			else {
-				addLogic("assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = '0;");
+				String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill";
+				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + language.CreateNodeName(BNode.WrFlush, stage, "") + ";");
 			}	
+		}
+	}
+	
+	private void IntegrateISAX_WrRD() {
+		if (ContainsOpInStage(BNode.WrRD, stage_execute)) {
+			ArrayList<String> logicStatement = new ArrayList<>();
+			String tab = "    ";
+			String valid_signame = language.CreateNodeName(BNode.WrRD_valid, stage_execute, "", true);
+			String value_signame = language.CreateNodeName(BNode.WrRD, stage_execute, "");
+			
+			logicStatement.add("if ( " + valid_signame + " ) begin");
+			logicStatement.add(tab + "scaiev.execute_RD = " + value_signame + ";");
+			logicStatement.add(tab + "scaiev.execute_RD_valid = 1'b1;");
+			logicStatement.add("end");
+			
+			String toWrite = String.join("\n", logicStatement);
+			
+			ReplaceLogic("SCAIEV_INSERT_WRRD", toWrite);
+		}
+		
+		
+		
+		if (op_stage_instr.containsKey(BNode.WrRD)) {
+			for (PipelineStage stage : op_stage_instr.get(BNode.WrRD).keySet()) {
+				if (!stage.equals(stage_execute) && !op_stage_instr.get(BNode.WrRD).get(stage).isEmpty()) {
+					logger.fatal("WrRD cannot be used in stage " + stage + ". Only supported in stage " + stage_execute + "!\n" +
+							"Please adjust ISAX(es): " +
+							GetISAXesWithOpInStage(BNode.WrRD, stage).map(isax -> isax.GetName()).reduce((a, b) -> a + ", " + b).orElse(""));
+				}
+			}
+			
 		}
 	}
 }
