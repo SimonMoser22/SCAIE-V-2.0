@@ -12,6 +12,7 @@ import itertools
 
 SCAIEV_MODULE_CLK = "clk_i"
 SCAIEV_MODULE_RST = "rst_i"
+SCAIEV_CLK_SIGNAL = "clk"
 MODULE_TAB = "    "
 
 class SCALPinNet:
@@ -198,8 +199,8 @@ def write_top(template_file_name, out_file_name, core_pin_name_translator=None, 
                             if len(net.scal_module_pin) != 0:
                                 out_top_file.write(line_tabs + _wiredecl(wirename, net))
                     out_top_file.write(line_tabs + "SCAL scal (\n")
-                    out_top_file.write(line_tabs + MODULE_TAB + (".%s(%s)\n" % (SCAIEV_MODULE_CLK, "clk")))
-                    out_top_file.write(line_tabs + MODULE_TAB + (",.%s(%s)\n" % (SCAIEV_MODULE_RST, "rst")))
+                    out_top_file.write(line_tabs + MODULE_TAB + (".%s(%s)\n" % (SCAIEV_MODULE_CLK, SCAIEV_CLK_SIGNAL)))
+                    out_top_file.write(line_tabs + MODULE_TAB + (",.%s(%s)\n" % (SCAIEV_MODULE_RST, SCAIEV_RST_SIGNAL)))
                     
                     #Similar to ISAXWIRES, only prevent duplicate SCAL-side ports.
                     added_scal_ports = set()
@@ -212,8 +213,8 @@ def write_top(template_file_name, out_file_name, core_pin_name_translator=None, 
                 case '//SCAIEV MAKETOP ISAXINST':
                     for isax_module, isaxes in isax_modules.items():
                         out_top_file.write(line_tabs + "%s %s (\n" % (isax_module, isax_module.lower()))
-                        out_top_file.write(line_tabs + MODULE_TAB + (".%s(%s)\n" % (SCAIEV_MODULE_CLK, "clk")))
-                        out_top_file.write(line_tabs + MODULE_TAB + (",.%s(%s)\n" % (SCAIEV_MODULE_RST, "rst")))
+                        out_top_file.write(line_tabs + MODULE_TAB + (".%s(%s)\n" % (SCAIEV_MODULE_CLK, SCAIEV_CLK_SIGNAL)))
+                        out_top_file.write(line_tabs + MODULE_TAB + (",.%s(%s)\n" % (SCAIEV_MODULE_RST, SCAIEV_RST_SIGNAL)))
                         for wirename, net in netlist.items():
                             wirename_actual = wirename.split(" ")[0]
                             if len(net.isax_module_pin) == 0:

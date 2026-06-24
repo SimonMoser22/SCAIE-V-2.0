@@ -52,6 +52,7 @@ public class CV32E40X extends CoreBackend {
 	private static final String[] cv32e40xStageNames = new String[] {"fetch", "decode", "execute", "writeback", ""};
 	
 	private static final String signame_decode_stall_wrPC = "decode_halt_wrPC";
+	private static final String signame_execute_stall_wrRD = "execute_halt_wrRD";
 	
 	
 	HashMap<SCAIEVNode, HashMap<PipelineStage, HashSet<String>>> op_stage_instr;
@@ -246,9 +247,11 @@ public class CV32E40X extends CoreBackend {
         this.PutNode("logic",  "", targetModule, BNode.WrFlush, stage_writeback);
         
         // RdStall
+        // Decode and execute stage halt signals need to report implicit stall signals
+        // generated in the glue module
         this.PutNode("logic",  "scaiev.fetch_isHalted", targetModule, BNode.RdStall, stage_fetch);
-        this.PutNode("logic",  "scaiev.decode_isHalted", targetModule, BNode.RdStall, stage_decode);
-        this.PutNode("logic",  "scaiev.execute_isHalted", targetModule, BNode.RdStall, stage_execute);
+        this.PutNode("logic",  "decode_isHalted", targetModule, BNode.RdStall, stage_decode);
+        this.PutNode("logic",  "execute_isHalted", targetModule, BNode.RdStall, stage_execute);
         this.PutNode("logic",  "scaiev.writeback_isHalted", targetModule, BNode.RdStall, stage_writeback);
         
         // WrStall
@@ -308,7 +311,7 @@ public class CV32E40X extends CoreBackend {
 	    ReplaceLogic("assign scaiev.decode_isSCAIEV",         "assign scaiev.decode_isSCAIEV = " + makeIValidExpression.apply(allISAXes) + ";");
 	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRS1", "assign scaiev.decode_isSCAIEV_usesRS1 = " + makeIValidExpression.apply(allISAXes_RS1) + ";");
 	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRS2", "assign scaiev.decode_isSCAIEV_usesRS2 = " + makeIValidExpression.apply(allISAXes_RS2) + ";");
-	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRD",  "assign scaiev.decode_isSCAIEV_usesRD = " + makeIValidExpression.apply(allISAXes_RD) + ";\n");
+	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRD",  "assign scaiev.decode_isSCAIEV_usesRD = " + makeIValidExpression.apply(allISAXes_RD) + ";");
 	}
 	
 	private void IntegrateISAX_WrStall() {
@@ -322,20 +325,27 @@ public class CV32E40X extends CoreBackend {
 			if (stage == stage_decode && ContainsOpInStage(BNode.WrPC, stage_decode)) {
 				stallLogic += signame_decode_stall_wrPC + " || ";
 			}
-			stallLogic += "0";
+			else if (stage == stage_execute && ContainsOpInStage(BNode.WrRD, stage_execute)) {
+				stallLogic += signame_execute_stall_wrRD + " || ";
+			}
+			stallLogic += "1'b0";
 			String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt";
 			ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt = " + stallLogic + ";");
 		}
 	}
 	
 	private void IntegrateISAX_WrFlush() {
-		
-		for (int stagePos = stagePos_fetch; stagePos <= stagePos_execute; stagePos++) {
+		String flushLogic = "1'b0";
+		for (int stagePos = stagePos_execute; stagePos >= stagePos_fetch; stagePos--) {
 			PipelineStage stage = stages[stagePos];
+			String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill";
 			if (ContainsOpInStage(BNode.WrFlush, stage)) {
-				String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill";
-				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + language.CreateNodeName(BNode.WrFlush, stage, "") + ";");
-			}	
+				flushLogic += " || " + language.CreateNodeName(BNode.WrFlush, stage, ""); 
+				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + flushLogic + ";");
+			
+			} else {
+				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + flushLogic + ";");
+			}
 		}
 	}
 	
@@ -354,6 +364,12 @@ public class CV32E40X extends CoreBackend {
 			String toWrite = String.join("\n", logicStatement);
 			
 			ReplaceLogic("SCAIEV_INSERT_WRRD", toWrite);
+			
+			AddDeclaration("logic " + signame_execute_stall_wrRD + ";");
+			String execute_stall_wrRD_cond = "scaiev.execute_isSCAIEV_usesRD && !" + valid_signame;
+			AddLogic("assign " + signame_execute_stall_wrRD + " = " + execute_stall_wrRD_cond + ";");
+			
+			ReplaceLogic("assign execute_isHalted", "assign execute_isHalted = scaiev.execute_isHalted || " + signame_execute_stall_wrRD + ";");
 		}
 		
 		
@@ -397,10 +413,8 @@ public class CV32E40X extends CoreBackend {
 		    String valid_signame = language.CreateNodeName(BNode.WrPC_valid, stage, "");
 		    String value_signame = language.CreateNodeName(BNode.WrPC, stage, "");
 		    
-		    String stagePrefix = cv32e40xStageNames[stagePos];
-		    
 		    logic_statement.add("if ( " + valid_signame + " ) begin");
-		    String var_name = "scaiev." + stagePrefix;
+		    String var_name = "scaiev." + cv32e40xStageNames[stagePos];
 		    if (stagePos == stagePos_decode) {
 		    	var_name += "_jmp";
 		    }
@@ -423,6 +437,9 @@ public class CV32E40X extends CoreBackend {
 			AddDeclaration("logic " + signame_decode_stall_wrPC + ";");
 			String decode_stall_wrPC_cond = "scaiev.decode_isSCAIEV && scaiev.decode_isSCAIEV_jmp && !scaiev.decode_jmp_target_valid";
 			AddLogic("assign " + signame_decode_stall_wrPC + " = " + decode_stall_wrPC_cond + ";");
+			
+			
+			ReplaceLogic("assign decode_isHalted", "assign decode_isHalted = scaiev.decode_isHalted || " + signame_decode_stall_wrPC + ";");
 			
 		}
 		
