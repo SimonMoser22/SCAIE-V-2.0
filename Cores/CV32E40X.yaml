@@ -21,15 +21,15 @@ pipeline:
   - {name: decoupled1,  kind: decoupled,    externalID: 4,  continuous: true, tags: [inorder, commit], nextStages: [], children: []}
 operations:
 - operation: RdRS1
-  earliest: 1
+  earliest: 2
   latency: 0
   latest: 2
-  costly: 2
+  costly: 0
 - operation: RdRS2
-  earliest: 1
+  earliest: 2
   latency: 0
   latest: 2
-  costly: 2
+  costly: 0
 - operation: WrRD
   earliest: 2
   latency: 1
@@ -86,8 +86,5 @@ operations:
   latency: 0
   latest: 2
   costly: 4
-- {operation: RdCustReg, earliest: 1, latency: 0, latest: 2}
-- {operation: WrCustReg.addr, earliest: 1, latency: 0, latest: 1}
-- {operation: WrCustReg.data, earliest: 2, latency: 1, costly: 3}
   
   

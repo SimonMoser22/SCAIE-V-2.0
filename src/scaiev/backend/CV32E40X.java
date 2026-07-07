@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -18,11 +17,9 @@ import scaiev.coreconstr.Core;
 import scaiev.coreconstr.CoreNode;
 import scaiev.frontend.SCAIEVInstr;
 import scaiev.frontend.SCAIEVNode;
-import scaiev.frontend.SCAL;
 import scaiev.pipeline.PipelineStage;
 import scaiev.scal.NodeInstanceDesc;
 import scaiev.util.FileWriter;
-import scaiev.util.Lang;
 import scaiev.util.ToWrite;
 import scaiev.util.Verilog;
 
@@ -121,7 +118,6 @@ public class CV32E40X extends CoreBackend {
 		ivalidKeyStream.distinct().forEach(ivalidKey -> {
 		  consumer.accept(ivalidKey.getNode(), ISAXes.get(ivalidKey.getISAX()), ivalidKey.getStage());
 		});
-	
 	}
 	
 	// From CVA5.java
@@ -154,7 +150,6 @@ public class CV32E40X extends CoreBackend {
 		this.language = new Verilog(user_BNode, toFile, this);
 		this.language.clk = "clk";
 		this.language.reset = "rst_n";
-		
 		
 		ForEachRdValidPin((name, isax, stage) -> {scalAPI.RequestToCorePin(BNode.RdIValid, stage, isax.GetName());});
 		
@@ -250,8 +245,8 @@ public class CV32E40X extends CoreBackend {
         // Decode and execute stage halt signals need to report implicit stall signals
         // generated in the glue module
         this.PutNode("logic",  "scaiev.fetch_isHalted", targetModule, BNode.RdStall, stage_fetch);
-        this.PutNode("logic",  "decode_isHalted", targetModule, BNode.RdStall, stage_decode);
-        this.PutNode("logic",  "execute_isHalted", targetModule, BNode.RdStall, stage_execute);
+        this.PutNode("logic",  "scaiev.decode_isHalted", targetModule, BNode.RdStall, stage_decode);
+        this.PutNode("logic",  "scaiev.execute_isHalted", targetModule, BNode.RdStall, stage_execute);
         this.PutNode("logic",  "scaiev.writeback_isHalted", targetModule, BNode.RdStall, stage_writeback);
         
         // WrStall
@@ -294,11 +289,15 @@ public class CV32E40X extends CoreBackend {
 	    List<String> allISAXes_RS1;
 	    List<String> allISAXes_RS2;
 	    List<String> allISAXes_RD;
+	    List<String> allISAXes_jmp;
+		List<String> allISAXes_bch;
 	
 	    allISAXes_RS1 = GetISAXesWithOpInAnyStage(BNode.RdRS1).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
 	    allISAXes_RS2 = GetISAXesWithOpInAnyStage(BNode.RdRS2).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
 	    allISAXes_RD = GetISAXesWithOpInAnyStage(BNode.WrRD).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
-
+	    allISAXes_jmp = GetISAXesWithOpInStage(BNode.WrPC, stage_decode).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
+		allISAXes_bch = GetISAXesWithOpInStage(BNode.WrPC, stage_execute).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
+		
 	    Function<List<String>, String> makeIValidExpression = isaxNames -> {
 	        return isaxNames.stream()
 	            .map(isaxName -> {
@@ -312,25 +311,20 @@ public class CV32E40X extends CoreBackend {
 	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRS1", "assign scaiev.decode_isSCAIEV_usesRS1 = " + makeIValidExpression.apply(allISAXes_RS1) + ";");
 	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRS2", "assign scaiev.decode_isSCAIEV_usesRS2 = " + makeIValidExpression.apply(allISAXes_RS2) + ";");
 	    ReplaceLogic("assign scaiev.decode_isSCAIEV_usesRD",  "assign scaiev.decode_isSCAIEV_usesRD = " + makeIValidExpression.apply(allISAXes_RD) + ";");
+		ReplaceLogic("assign scaiev.decode_isSCAIEV_jmp", "assign scaiev.decode_isSCAIEV_jmp = " + makeIValidExpression.apply(allISAXes_jmp) + ";");
+		ReplaceLogic("assign scaiev.decode_isSCAIEV_bch", "assign scaiev.decode_isSCAIEV_bch = " + makeIValidExpression.apply(allISAXes_bch) + ";");
+		
 	}
 	
 	private void IntegrateISAX_WrStall() {
 		
 		for (int stagePos = stagePos_fetch; stagePos <= stagePos_execute; stagePos++) {
 			PipelineStage stage = stages[stagePos];
-			String stallLogic = "";
 			if (ContainsOpInStage(BNode.WrStall, stage)) {
-				stallLogic += language.CreateNodeName(BNode.WrStall, stage, "") + " || ";
+				String stallLogic = language.CreateNodeName(BNode.WrStall, stage, "");
+				String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt";
+				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt = " + stallLogic + ";");
 			}
-			if (stage == stage_decode && ContainsOpInStage(BNode.WrPC, stage_decode)) {
-				stallLogic += signame_decode_stall_wrPC + " || ";
-			}
-			else if (stage == stage_execute && ContainsOpInStage(BNode.WrRD, stage_execute)) {
-				stallLogic += signame_execute_stall_wrRD + " || ";
-			}
-			stallLogic += "1'b0";
-			String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt";
-			ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doHalt = " + stallLogic + ";");
 		}
 	}
 	
@@ -341,110 +335,33 @@ public class CV32E40X extends CoreBackend {
 			String grep = "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill";
 			if (ContainsOpInStage(BNode.WrFlush, stage)) {
 				flushLogic += " || " + language.CreateNodeName(BNode.WrFlush, stage, ""); 
-				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + flushLogic + ";");
-			
-			} else {
-				ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + flushLogic + ";");
 			}
+			ReplaceLogic(grep, "assign scaiev." + cv32e40xStageNames[stagePos] + "_doKill = " + flushLogic + ";");
 		}
 	}
 	
 	private void IntegrateISAX_WrRD() {
 		if (ContainsOpInStage(BNode.WrRD, stage_execute)) {
-			ArrayList<String> logicStatement = new ArrayList<>();
-			String tab = "    ";
 			String valid_signame = language.CreateNodeName(BNode.WrRD_valid, stage_execute, "");
 			String value_signame = language.CreateNodeName(BNode.WrRD, stage_execute, "");
 			
-			logicStatement.add("if ( " + valid_signame + " ) begin");
-			logicStatement.add(tab + "scaiev.execute_RD = " + value_signame + ";");
-			logicStatement.add(tab + "scaiev.execute_RD_valid = 1'b1;");
-			logicStatement.add("end");
-			
-			String toWrite = String.join("\n", logicStatement);
-			
-			ReplaceLogic("SCAIEV_INSERT_WRRD", toWrite);
-			
-			AddDeclaration("logic " + signame_execute_stall_wrRD + ";");
-			String execute_stall_wrRD_cond = "scaiev.execute_isSCAIEV_usesRD && !" + valid_signame;
-			AddLogic("assign " + signame_execute_stall_wrRD + " = " + execute_stall_wrRD_cond + ";");
-			
-			ReplaceLogic("assign execute_isHalted", "assign execute_isHalted = scaiev.execute_isHalted || " + signame_execute_stall_wrRD + ";");
-		}
-		
-		
-		
-		if (op_stage_instr.containsKey(BNode.WrRD)) {
-			for (PipelineStage stage : op_stage_instr.get(BNode.WrRD).keySet()) {
-				if (!stage.equals(stage_execute) && !op_stage_instr.get(BNode.WrRD).get(stage).isEmpty()) {
-					logger.fatal("WrRD cannot be used in stage " + stage + ". Only supported in stage " + stage_execute + "!\n" +
-							"Please adjust ISAX(es): " +
-							GetISAXesWithOpInStage(BNode.WrRD, stage).map(isax -> isax.GetName()).reduce((a, b) -> a + ", " + b).orElse(""));
-				}
-			}
-			
+			ReplaceLogic("assign scaiev.execute_RD =", "assign scaiev.execute_RD = " + value_signame + ";");
+			ReplaceLogic("assign scaiev.execute_RD_valid =", "assign scaiev.execute_RD_valid = " + valid_signame + ";");
 		}
 	}
 	
 	private void IntegrateISAX_WrPC() {
-		List<String> allISAXes_jmp;
-		List<String> allISAXes_bch;
-		
-		allISAXes_jmp = GetISAXesWithOpInStage(BNode.WrPC, stage_decode).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
-		allISAXes_bch = GetISAXesWithOpInStage(BNode.WrPC, stage_execute).filter(instr -> !instr.HasNoOp()).map(instr -> instr.GetName()).toList();
-		
-		Function<List<String>, String> makeIValidExpression = isaxNames -> {
-		    return isaxNames.stream()
-				.map(isaxName -> {
-					return language.CreateNodeName(BNode.RdIValid.NodeNegInput(), stage_decode, isaxName);  
-				})
-				.reduce((a, b) -> a + " || " + b)
-				.orElse("1'b0");
-		};
-		
-		ReplaceLogic("assign scaiev.decode_isSCAIEV_jmp", "assign scaiev.decode_isSCAIEV_jmp = " + makeIValidExpression.apply(allISAXes_jmp) + ";");
-		ReplaceLogic("assign scaiev.decode_isSCAIEV_bch", "assign scaiev.decode_isSCAIEV_bch = " + makeIValidExpression.apply(allISAXes_bch) + ";");
-		
-		
-		Function<Integer, String> generateWrPCLogic = stagePos -> {
-		    ArrayList<String> logic_statement = new ArrayList<>();
-		    String tab = "    ";
-		    PipelineStage stage = stages[stagePos];
-		    String valid_signame = language.CreateNodeName(BNode.WrPC_valid, stage, "");
-		    String value_signame = language.CreateNodeName(BNode.WrPC, stage, "");
-		    
-		    logic_statement.add("if ( " + valid_signame + " ) begin");
-		    String var_name = "scaiev." + cv32e40xStageNames[stagePos];
-		    if (stagePos == stagePos_decode) {
-		    	var_name += "_jmp";
-		    }
-		    else if (stagePos == stagePos_execute) {
-		    	var_name += "_bch";
-		    }
-		    var_name += "_target";
-		    logic_statement.add(tab + var_name + " = " + value_signame + ";");
-		    logic_statement.add(tab + var_name + "_valid = 1'b1;");
-		    logic_statement.add("end");
-		    
-		    return String.join("\n", logic_statement);            
-		};
-		
 		
 		if (ContainsOpInStage(BNode.WrPC, stage_decode)) {
-			
-			ReplaceLogic("SCAIEV_INSERT_WRPC_ID", generateWrPCLogic.apply(stagePos_decode));
-			
-			AddDeclaration("logic " + signame_decode_stall_wrPC + ";");
-			String decode_stall_wrPC_cond = "scaiev.decode_isSCAIEV && scaiev.decode_isSCAIEV_jmp && !scaiev.decode_jmp_target_valid";
-			AddLogic("assign " + signame_decode_stall_wrPC + " = " + decode_stall_wrPC_cond + ";");
-			
-			
-			ReplaceLogic("assign decode_isHalted", "assign decode_isHalted = scaiev.decode_isHalted || " + signame_decode_stall_wrPC + ";");
-			
+			ReplaceLogic("assign scaiev.decode_jmp_target =", "assign scaiev.decode_jmp_target = " + language.CreateNodeName(BNode.WrPC, stage_decode, "") + ";");
+			ReplaceLogic("assign scaiev.decode_jmp_target_valid =", "assign scaiev.decode_jmp_target_valid = " + language.CreateNodeName(BNode.WrPC_valid, stage_decode, "") + ";");
+		
 		}
 		
-		if (ContainsOpInStage(BNode.WrPC, stage_execute)) {		
-			ReplaceLogic("SCAIEV_INSERT_WRPC_EX", generateWrPCLogic.apply(stagePos_execute));
+		if (ContainsOpInStage(BNode.WrPC, stage_execute)) {
+			ReplaceLogic("assign scaiev.execute_bch_target =", "assign scaiev.execute_bch_target = " + language.CreateNodeName(BNode.WrPC, stage_execute, "") + ";");
+			ReplaceLogic("assign scaiev.execute_bch_target_valid =", "assign scaiev.execute_bch_target_valid = " + language.CreateNodeName(BNode.WrPC_valid, stage_execute, "") + ";");
+		
 		}
 	}
 	
