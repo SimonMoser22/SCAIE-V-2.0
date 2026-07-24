@@ -154,7 +154,6 @@ public class CV32E40X extends CoreBackend {
 		ForEachRdValidPin((name, isax, stage) -> {scalAPI.RequestToCorePin(BNode.RdIValid, stage, isax.GetName());});
 		
 		core.putNode(BNode.RdInStageValid, new CoreNode(stagePos_fetch, 0, stagePos_execute, stagePos_execute + 1, BNode.RdInStageValid.name));
-		
 	}
 
 	@Override
@@ -208,13 +207,12 @@ public class CV32E40X extends CoreBackend {
         this.PutNode("logic", "scaiev.fetch_PC", targetModule, BNode.RdPC, stage_fetch);
         this.PutNode("logic", "scaiev.decode_PC", targetModule, BNode.RdPC, stage_decode);
         this.PutNode("logic", "scaiev.execute_PC", targetModule, BNode.RdPC, stage_execute);
-        this.PutNode("logic", "scaiev.writeback_PC", targetModule, BNode.RdPC, stage_writeback);
         
         // RdInstr
         this.PutNode("logic",  "scaiev.fetch_Instr", targetModule, BNode.RdInstr, stage_fetch);
         this.PutNode("logic",  "scaiev.decode_Instr", targetModule, BNode.RdInstr, stage_decode);
         this.PutNode("logic",  "scaiev.execute_Instr", targetModule, BNode.RdInstr, stage_execute);
-        this.PutNode("logic",  "scaiev.writeback_Instr", targetModule, BNode.RdInstr, stage_writeback);
+        
         
         // RdIValid
         this.PutNode("logic",  "", targetModule, BNode.RdIValid, stage_decode);
@@ -233,27 +231,21 @@ public class CV32E40X extends CoreBackend {
         this.PutNode("logic",  "scaiev.fetch_isKilled", targetModule, BNode.RdFlush, stage_fetch);
         this.PutNode("logic",  "scaiev.decode_isKilled", targetModule, BNode.RdFlush, stage_decode);
         this.PutNode("logic",  "scaiev.execute_isKilled", targetModule, BNode.RdFlush, stage_execute);
-        this.PutNode("logic",  "scaiev.writeback_isKilled", targetModule, BNode.RdFlush, stage_writeback);
         
         // WrFlush
         this.PutNode("logic",  "", targetModule, BNode.WrFlush, stage_fetch);
         this.PutNode("logic",  "", targetModule, BNode.WrFlush, stage_decode);
         this.PutNode("logic",  "", targetModule, BNode.WrFlush, stage_execute);
-        this.PutNode("logic",  "", targetModule, BNode.WrFlush, stage_writeback);
         
         // RdStall
-        // Decode and execute stage halt signals need to report implicit stall signals
-        // generated in the glue module
         this.PutNode("logic",  "scaiev.fetch_isHalted", targetModule, BNode.RdStall, stage_fetch);
         this.PutNode("logic",  "scaiev.decode_isHalted", targetModule, BNode.RdStall, stage_decode);
         this.PutNode("logic",  "scaiev.execute_isHalted", targetModule, BNode.RdStall, stage_execute);
-        this.PutNode("logic",  "scaiev.writeback_isHalted", targetModule, BNode.RdStall, stage_writeback);
         
         // WrStall
         this.PutNode("logic",  "", targetModule, BNode.WrStall, stage_fetch);
         this.PutNode("logic",  "", targetModule, BNode.WrStall, stage_decode);
         this.PutNode("logic",  "", targetModule, BNode.WrStall, stage_execute);
-        this.PutNode("logic",  "", targetModule, BNode.WrStall, stage_writeback);
         
         // RdInStageValid
         this.PutNode("logic",  "scaiev.fetch_valid", targetModule, BNode.RdInStageValid, stage_fetch);
